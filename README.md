@@ -2,13 +2,15 @@
 
 Raspbian disk images can be quite large when they are backed up because on boot they are set to use the entire size of the SD card for the root partition. ResizePi is a script to remove the extra space and set Raspbian to resize to the filesystem to the disk.
 
+## Prerequisites ##
+`parted losetup tune2fs md5sum e2fsck`
+This will not work on a  [NOOBS](https://github.com/raspberrypi/noobs) image due to the fact that the [NOOBS partitioning](https://github.com/raspberrypi/noobs/wiki/NOOBS-partitioning-explained) is different than the Raspbian Stretch and Stretch Lite images.
+
 ## Usage ##
 `sudo resizepi.sh [-s] imagefile.img [newimagefile.img]`
 
 If the `-s` option is given the script will skip the autoexpanding part of the process. If you specify the `newimagefile.img` a new file will be made and resized. You will need local disk space.
 
-## Prerequisites ##
-This will not work on a  [NOOBS](https://github.com/raspberrypi/noobs) image due to the fact that the [NOOBS partitioning](https://github.com/raspberrypi/noobs/wiki/NOOBS-partitioning-explained) is different than the Raspbian Stretch and Stretch Lite images.
 
 ## Installation ##
 ```bash
@@ -40,8 +42,3 @@ The filesystem on /dev/loop1 is now 773603 blocks long.
 
 Shrunk pi.img from 30G to 3.1G
 ```
-
-## Contributing ##
-If you find a bug please create an issue for it. If you would like a new feature added, you can create an issue for it but I can't promise that I will get to it.
-
-Pull requests for new features and bug fixes are more than welcome!
