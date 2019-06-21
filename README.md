@@ -14,9 +14,9 @@ If the `-s` option is given the script will skip the autoexpanding part of the p
 
 ## Installation ##
 ```bash
-wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
-chmod +x pishrink.sh
-sudo mv pishrink.sh /usr/local/bin
+wget https://raw.githubusercontent.com/swoopsta/ResizePi/master/resizepi.sh
+chmod +x resizepi.sh
+sudo mv resizepi.sh /usr/local/bin
 ```
 
 ## Example ##
