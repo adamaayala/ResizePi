@@ -28,11 +28,11 @@ for command in parted losetup tune2fs md5sum e2fsck resize2fs; do
 done
 ###############################################################################
 
-usage() { echo "Usage: $0 [-s] imagefile.Image [newimagefile.Image]"; exit -1; }
+usage() { echo "Usage: $0 [-s] imagefile.img [newimagefile.img]"; exit -1; }
 
-Skip_Autoexpand=false
+should_skip_autoexpand=false
 
-while Get_Options ":s" opt; do
+while getopts ":s" opt; do
   case "${opt}" in
     s) Skip_Autoexpand=true ;;
     *) usage ;;
