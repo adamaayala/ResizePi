@@ -10,6 +10,35 @@
 #    This will fail if you do not have enough disk space to build
 #    the new image. ie -64gb will need 128gb of free disk space on
 #    your local drive.
+#
+# Prerequisites: dcfldd parted losetup tune2fs md5sum e2fsck resize2fs
+###############################################################################
+
+# Check root access------------------------------------------------------------
+if (( EUID != 0 )); then
+  echo "ERROR: You need to be run this command as root."
+  exit -3
+fi
+#------------------------------------------------------------------------------
+
+# Check for prequisites -------------------------------------------------------
+for command in parted losetup tune2fs md5sum e2fsck resize2fs dcfldd; do
+  which $command 2>&1 >/dev/null
+  if (( $? != 0 )); then
+    echo "ERROR: $command is not installed."
+    echo "Do you wish to install the prequisites?"
+    select yn in "Yes" "No"; do
+    case $yn in
+        Yes ) apt-get update && apt-get install parted losetup tune2fs md5sum e2fsck resize2fs dcfldd; break;;
+        No ) exit;;
+    esac
+done
+
+
+
+    exit -4
+  fi
+done
 ###############################################################################
 
 function Clean_Up() {
@@ -18,15 +47,7 @@ function Clean_Up() {
   fi
 }
 
-# Check for prequisites #######################################################
-for command in parted losetup tune2fs md5sum e2fsck resize2fs; do
-  which $command 2>&1 >/dev/null
-  if (( $? != 0 )); then
-    echo "ERROR: $command is not installed."
-    exit -4
-  fi
-done
-###############################################################################
+# Check Arguments #############################################################
 
 usage() { echo "Usage: $0 [-s] imagefile.img [newimagefile.img]"; exit -1; }
 
@@ -40,7 +61,6 @@ while getopts ":s" opt; do
 done
 shift $((OPTIND-1))
 
-# Arguments####################################################################
 Image="$1"
 ###############################################################################
 
@@ -52,11 +72,6 @@ if [[ ! -f "$Image" ]]; then
   echo "ERROR: $Image is not an disk image file..."
   exit -2
 fi
-if (( EUID != 0 )); then
-  echo "ERROR: You need to be run this command as root."
-  exit -3
-fi
-
 # Copy to new file if requested ###############################################
 if [ -n "$2" ]; then
   echo "Copying $1 to $2..."
@@ -196,5 +211,11 @@ parted -s "$Image" unit B mkpart primary $Partition_Start $New_Partition_End >/d
 End_Result=$(parted -ms "$Image" unit B print free | tail -1 | cut -d ':' -f 2 | tr -d 'B')
 truncate -s $End_Result "$Image"
 After_Size=$(ls -lh "$Image" | cut -d ' ' -f 5)
+
+#Zero-fill the free space for better compression
+mount "$Loopback" "$Mount_Point"
+dcfldd if=/dev/zero of="$Mount_Point"/zero.txt
+rm "$Mount_Point"/zero.txt
+umount "$Mount_Point"
 
 echo "Resized $Image from $Before_Size to $After_Size"
