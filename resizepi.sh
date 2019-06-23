@@ -11,8 +11,8 @@
 #    the new image. ie -64gb will need 128gb of free disk space on
 #    your local drive.
 #
-# Prerequisites: dcfldd parted losetup tune2fs md5sum e2fsck resize2fs
-###############################################################################
+# Prerequisites: parted losetup tune2fs md5sum e2fsck resize2fs
+# -----------------------------------------------------------------------------
 
 # Check root access------------------------------------------------------------
 if (( EUID != 0 )); then
@@ -30,25 +30,18 @@ for command in parted losetup tune2fs md5sum e2fsck resize2fs dcfldd; do
     select yn in "Yes" "No"; do
     case $yn in
         Yes ) apt-get update && apt-get install parted losetup tune2fs md5sum e2fsck resize2fs dcfldd; break;;
-        No ) exit;;
+        No ) exit -4;;
     esac
-done
-
-
-
-    exit -4
+  done
   fi
 done
-###############################################################################
-
+# -----------------------------------------------------------------------------
 function Clean_Up() {
   if losetup $Loopback &>/dev/null; then
 	losetup -d "$Loopback"
   fi
 }
-
-# Check Arguments #############################################################
-
+# Check Arguments -------------------------------------------------------------
 usage() { echo "Usage: $0 [-s] imagefile.img [newimagefile.img]"; exit -1; }
 
 should_skip_autoexpand=false
@@ -62,9 +55,9 @@ done
 shift $((OPTIND-1))
 
 Image="$1"
-###############################################################################
+# -----------------------------------------------------------------------------
 
-# Usage sanity checks #########################################################
+# Usage sanity checks ---------------------------------------------------------
 if [[ -z "$Image" ]]; then
   Usage
 fi
@@ -72,7 +65,7 @@ if [[ ! -f "$Image" ]]; then
   echo "ERROR: $Image is not an disk image file..."
   exit -2
 fi
-# Copy to new file if requested ###############################################
+# Copy to new file if requested -----------------------------------------------
 if [ -n "$2" ]; then
   echo "Copying $1 to $2..."
   cp --reflink=auto --sparse=always "$1" "$2"
@@ -84,13 +77,13 @@ if [ -n "$2" ]; then
   chown $old_owner "$2"
   Image="$2"
 fi
-###############################################################################
+#------------------------------------------------------------------------------
 
-# Clean_Up at script exit #####################################################
+# Clean_Up at script exit -----------------------------------------------------
 trap Clean_Up ERR EXIT
-###############################################################################
+#------------------------------------------------------------------------------
 
-# Gather Data #################################################################
+# Gather Data About Image -----------------------------------------------------
 Before_Size=$(ls -lh "$Image" | cut -d ' ' -f 5)
 Parted_Output=$(parted -ms "$Image" unit B print | tail -n 1)
 Partition_Number=$(echo "$Parted_Output" | cut -d ':' -f 1)
@@ -100,7 +93,7 @@ Tune2fs_Output=$(tune2fs -l "$Loopback")
 Current_Size=$(echo "$Tune2fs_Output" | grep '^Block count:' | tr -d ' ' | cut -d ':' -f 2)
 Block_Size=$(echo "$Tune2fs_Output" | grep '^Block size:' | tr -d ' ' | cut -d ':' -f 2)
 
-#Check to see if disk should allocate free space to /root #####################
+#Check to see if disk should allocate free space to /root ---------------------
 if [ "$Skip_Autoexpand" = false ]; then
   # Expand rootfs on next boot
   Mount_Point=$(mktemp -d)
@@ -108,16 +101,16 @@ if [ "$Skip_Autoexpand" = false ]; then
   if [ $(md5sum "$Mount_Point/etc/rc.local" | cut -d ' ' -f 1) != "0542054e9ff2d2e0507ea1ffe7d4fc87" ]; then
     echo "Creating New /etc/rc.local"
     mv "$Mount_Point/etc/rc.local" "$Mount_Point/etc/rc.local.bak"
-###############################################################################
+#------------------------------------------------------------------------------
 
-#### Do Not Modify the Folllowing #############################################
+# Do Not Modify the Folllowing ------------------------------------------------
 cat <<\EOF1 > "$Mount_Point/etc/rc.local"
 #!/bin/bash
 do_expand_rootfs() {
   ROOT_PART=$(mount | sed -n 's|^/dev/\(.*\) on / .*|\1|p')
   PART_NUM=${ROOT_PART#mmcblk0p}
   if [ "$PART_NUM" = "$ROOT_PART" ]; then
-    echo "$ROOT_PART is not an SD card. Don't know how to expand"
+    echo "$ROOT_PART is not an SD card. Cannot expand"
     return 0
   fi
   PART_START=$(parted /dev/mmcblk0 -ms unit s p | grep "^${PART_NUM}" | cut -f 2 -d: | sed 's/[^0-9]//g')
@@ -164,7 +157,7 @@ sleep 5
 rm -f /etc/rc.local; cp -f /etc/rc.local.bak /etc/rc.local; /etc/rc.local
 exit 0
 EOF1
-##### End No Modify Zone ######################################################
+# End No Modify Zone ---------------------------------------------------------
     chmod +x "$Mount_Point/etc/rc.local"
   fi
   umount "$Mount_Point"
@@ -172,15 +165,16 @@ else
   echo "Skipping Auto Filesystem Allocation"
 fi
 
-# Run Filesystems Checks ######################################################
+# Run Filesystems Checks ------------------------------------------------------
 e2fsck -p -f "$Loopback"
 Minimum_Size=$(resize2fs -P "$Loopback" | cut -d ':' -f 2 | tr -d ' ')
 if [[ $Current_Size -eq $Minimum_Size ]]; then
-  echo "ERROR: Image already the smallest size it can be."
+  echo "ERROR: Image is already the smallest size it can be."
   exit -6
 fi
+#------------------------------------------------------------------------------
 
-# Add A Bit of Free Space to the End of Disk ##################################
+# Add A Bit of Free Space to the End for safety -------------------------------
 Extra_Space=$(($Current_Size - $Minimum_Size))
 for Space in 5000 1000 100; do
   if [[ $Extra_Space -gt $space ]]; then
@@ -188,8 +182,9 @@ for Space in 5000 1000 100; do
     break
   fi
 done
+#------------------------------------------------------------------------------
 
-# Shrink Disk #################################################################
+# Shrink Disk -----------------------------------------------------------------
 resize2fs -p "$Loopback" $Minimum_Size
 if [[ $? != 0 ]]; then
   echo "ERROR: resize2fs failed..."
@@ -200,22 +195,17 @@ if [[ $? != 0 ]]; then
   exit -7
 fi
 sleep 1
-###############################################################################
-#Shrink Root FS ###############################################################
+#------------------------------------------------------------------------------
+
+# Create New Partition --------------------------------------------------------
 Partion_New_Size=$(($Minimum_Size * $Block_Size))
 New_Partition_End=$(($Partition_Start + $Partion_New_Size))
 parted -s -a minimal "$Image" rm $Partition_Number >/dev/null
 parted -s "$Image" unit B mkpart primary $Partition_Start $New_Partition_End >/dev/null
-###############################################################################
-#Truncate the file ############################################################
+#------------------------------------------------------------------------------
+
+# Trim the file  --------------------------------------------------------------
 End_Result=$(parted -ms "$Image" unit B print free | tail -1 | cut -d ':' -f 2 | tr -d 'B')
 truncate -s $End_Result "$Image"
 After_Size=$(ls -lh "$Image" | cut -d ' ' -f 5)
-
-#Zero-fill the free space for better compression
-mount "$Loopback" "$Mount_Point"
-dcfldd if=/dev/zero of="$Mount_Point"/zero.txt
-rm "$Mount_Point"/zero.txt
-umount "$Mount_Point"
-
 echo "Resized $Image from $Before_Size to $After_Size"

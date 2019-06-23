@@ -40,5 +40,5 @@ Begin pass 4 (max = 7348)
 Updating inode references     XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 The filesystem on /dev/loop1 is now 773603 blocks long.
 
-Shrunk pi.img from 30G to 3.1G
+Resized pi.img from 30G to 3.1G
 ```
